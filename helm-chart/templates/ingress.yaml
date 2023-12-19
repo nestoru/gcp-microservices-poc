@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: devops-microservices-ingress
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"  # cert-manager issuer name
+
+spec:
+  rules:
+  - host: "gcp-microservice.34.160.253.11.nip.io"
+    http:
+      paths:
+      - path: /v{{ .Values.appVersion }}/*
+        pathType: Prefix
+        backend:
+          service:
+            name: devops-microservices-{{ .Values.appVersion }}
+            port:
+              number: 3443
+  tls:
+  - hosts:
+    - "gcp-microservice.34.160.253.11.nip.io"
+    secretName: devops-microservices-tls  # This secret will be created/managed by cert-manager
+

@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devops-microservices-{{ .Values.appVersion }}
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: devops-microservices-{{ .Values.appVersion }}
+  template:
+    metadata:
+      labels:
+        app: devops-microservices-{{ .Values.appVersion }}
+    spec:
+      containers:
+      - name: devops-microservices
+        image: gcr.io/devops-microservices/devops-microservices:{{ .Values.appVersion }}
+
+        ports:
+        - containerPort: 3443
+          protocol: TCP
+
