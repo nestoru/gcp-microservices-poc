@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -ex
 
 # Check if the app version argument is provided
 if [ "$#" -ne 1 ]; then
@@ -13,10 +13,12 @@ CHART_DIR="./helm-chart"
 NAMESPACE="devops-microservices"
 
 # Step 1: Build and Push Docker Image
+cd microservice
 echo "Building Docker image: $IMAGE_NAME"
 docker build -t $IMAGE_NAME .
 echo "Pushing Docker image to registry"
 docker push $IMAGE_NAME
+cd ../
 
 # Step 2: Deploy with Helm
 echo "Deploying application with Helm"

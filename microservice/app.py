@@ -23,5 +23,5 @@ def devops_endpoint(major_version=None):
     return jsonify({"major_version": major_version, "message": response_message})
 
 if __name__ == '__main__':
-    app.run(debug=True, ssl_context=('cert.pem', 'key.pem'), port=3443)
+    app.run(debug=True, ssl_context=('cert.pem', 'key.pem'), host='0.0.0.0', port=3443)
 

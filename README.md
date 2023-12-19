@@ -45,7 +45,11 @@ gcloud projects add-iam-policy-binding devops-microservices \
 gcloud iam service-accounts keys create devops-microservices_credentials.json \
   --iam-account devops-microservices@devops-microservices.iam.gserviceaccount.com
 ```
+- Configure docker to allow interactions with google cloud registry (GCR)
+```
+gcloud auth configure-docker
 
+```
 ## Changing the IaC
 After any change validate
 ```
@@ -90,7 +94,7 @@ kubectl get crd | grep cert-manager.io
 ```
 gcloud container clusters list
 ```
-- Generate a kubeconfig entry for the cluster named devops-microservices
+- Generate a kubeconfig entry to authorize kubectl to interact with the cluster named devops-microservices
 ```
 gcloud container clusters get-credentials devops-microservices --region europe-southwest1-a  --project devops-microservices
 ``` 
@@ -98,7 +102,13 @@ gcloud container clusters get-credentials devops-microservices --region europe-s
 ```
 kubectl create  namespace devops-microservices
 ```
-
+- Set context and namespace for kubectl 
+```
+kubectl config get-contexts
+kubectl get namespaces
+kubectl config set-context --current --namespace=devops-microservices
+kubectl get pods 
+```
 ## Microservice
 In the previous IaC we will deploy a microservice called DevOps. 
 
@@ -128,7 +138,7 @@ https://${HOST}/DevOps
   "message": "Hello Juan Perez your message will be sent"
 }
 ```
-The major_version is returned if the endpoint is invoked with a path that starts with /v{major_version}/*. This is important to assert that the version of the microservice being returned is the one the client expects.
+The major_version is returned if the endpoint is invoked with a path that starts with /v{major_version}/. This is important to assert that the version of the microservice being returned is the one the client expects.
  
 ### Deploy and run locally
 The microservice is written in python:
@@ -142,18 +152,22 @@ export EXPECTED_API_KEY='2f5ae96c-b558-4c7b-a590-a501ae1c3f6c' && python app.py
 
 ### Deploy and run locally with Docker to confirm it will run in kubernetes
 ```
-docker run -e EXPECTED_API_KEY='2f5ae96c-b558-4c7b-a590-a501ae1c3f6c' -p 3443:3443 my-flask-app
+cd microservice
+docker build . -t devops-microservices 
+docker run -e EXPECTED_API_KEY='2f5ae96c-b558-4c7b-a590-a501ae1c3f6c' --detach --publish 3443:3443 --name devops-microservices devops-microservices
+# issue curl command and conmfirm it works. To further debug, enter the running container:
+docker exec -ti devops-microservices bash
 ```
 
 ### Deploy and run on Kubernetes
-The microservice is deployed in the devops-microservices project in GKE. We will package it in a docker image our simple devops-microservices app that listens on port 3443 for HTTPS requests; will deploy it to our GCP cluster called devops-microservice; will use the cert-manager available in that cluster and which was installed via terraform and Helm to make sure the service is encrypted with a valid certificate key; Let's encrypt is used as the certificate issuer; a public IP should expose the service; Google loadbalancer should be attached to that IP; if the request is made to the loadbalancer with pattern /v${majorVersion}/*  where majorVersion can be any integer, then load balance the request to the pods with name devops-microservices-${majorVersion}; Any request not starting with that pattern should be refused; use Helm to adhoc deploy the app with a given version number (The version number should be passed via CLI parameter and all necessary files should be built on the fly out of existing helm templates with a .Value placeholder).
+The microservice is deployed in the devops-microservices project in GKE. We will package it in a docker image our simple devops-microservices app that listens on port 3443 for HTTPS requests; will deploy it to our GCP cluster called devops-microservice; will use the cert-manager available in that cluster and which was installed via terraform and Helm to make sure the service is encrypted with a valid certificate key; Let's encrypt is used as the certificate issuer; a public IP should expose the service; Google loadbalancer should be attached to that IP; if the request is made to the loadbalancer with pattern /v${majorVersion}/  where majorVersion can be any integer, then load balance the request to the pods with name devops-microservices-${majorVersion}; Any request not starting with that pattern should be refused; use Helm to adhoc deploy the app with a given version number (The version number should be passed via CLI parameter and all necessary files should be built on the fly out of existing helm templates with a .Value placeholder).
 
 - Create an external IP address for the Google loadbalancer
 ```
 gcloud compute addresses create devops-microservices --global
 gcloud compute addresses describe devops-microservices --global
 ```
-The output should give you the external address. In my case it was 34.160.253.11. With that address you should be able to use the nip.io wildcard DNS service to serve the app using a let's encrypt certificate on any url like *.34.160.253.11.nip.io. We will use gcp-microservice.34.160.253.11.nip.io. You can confirm it hits your loadbalancer:
+The output should give you the external address. In my case it was 34.160.253.11. With that address you should be able to use the nip.io wildcard DNS service to serve the app using a let's encrypt certificate on any url like .34.160.253.11.nip.io. We will use gcp-microservice.34.160.253.11.nip.io. You can confirm it hits your loadbalancer:
 ```
 ping gcp-microservice.34.160.253.11.nip.io
 ```
@@ -161,7 +175,7 @@ ping gcp-microservice.34.160.253.11.nip.io
 - A public IP reserved in GCP and DNS resolving gcp-microservice.34.160.253.11.nip.io to that IP
 - The app should be deployed in two pods and registered dynamically as devops-microservices-1 if "1" is set to be its version, devops-microservices-2 if "2" is set to be its version and so on. The version is mandatory to be able to deploy.
 - Google loadbalancer should respond to requests to gcp-microservice.34.160.253.11.nip.io
-- If the request is made to the loadbalancer with pattern /v${majorVersion}/*  where majorVersion can be any integer, then load balance the request to the pods with name devops-microservices-${majorVersion}
+- If the request is made to the loadbalancer with pattern /v${majorVersion}/  where majorVersion can be any integer, then load balance the request to the pods with name devops-microservices-${majorVersion}
 - Any request not starting with that pattern should be refused
 - deploy.sh is used to deploy a specific version number (the major version) passed as unique argument.
 - It should not be used manually but for the purpose of this POC we first use it manually and then later use it from CI/CD.
@@ -174,7 +188,7 @@ rm -fr helm-chart/templates/*
 - helm-chart/templates/deployment.yaml contains the image to deploy using this version number.
 - helm-chart/templates/letsencrypt-clusterissuer.yaml has the Let's Encrypt ClusterIssuer configuration.
 - helm-chart/templates/service.yaml has the loadbalancer, and source/detination ports for the service.
-- helm-chart/templates/ingress.yaml has the rules for routing the microservice version /v{majorVersion/* to the correct app devops-microservices-{majorVersion}}
+- helm-chart/templates/ingress.yaml has the rules for routing the microservice version /v{majorVersion/ to the correct app devops-microservices-{majorVersion}}
 - Use the below to deploy a specific version adhoc
 ```
 helm upgrade --install helm-chart ./helm-chart --namespace devops-microservices --set appVersion=1
