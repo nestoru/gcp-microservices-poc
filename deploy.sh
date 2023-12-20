@@ -24,8 +24,6 @@ docker push $IMAGE_NAME
 cd ../
 
 # Deploy with Helm
-echo "Deleting helm resources because the docker images for any microservice can be patched"
-helm uninstall helm -n devops-microservices
 echo "Deploying application with Helm"
 helm upgrade --install helm $CHART_DIR --namespace $NAMESPACE --set majorVersion=$major_version --set appVersion=$APP_VERSION
 
