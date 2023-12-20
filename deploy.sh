@@ -9,20 +9,25 @@ fi
 # Read the app version from the first argument
 APP_VERSION="$1"
 IMAGE_NAME="gcr.io/devops-microservices/devops-microservices:$APP_VERSION"
-CHART_DIR="./helm-chart"
+CHART_DIR="./helm"
 NAMESPACE="devops-microservices"
+major_version="${APP_VERSION%%.*}"
 
-# Step 1: Build and Push Docker Image
+# Build and Push Docker Image
 cd microservice
 echo "Building Docker image: $IMAGE_NAME"
 docker build -t $IMAGE_NAME .
+echo "Deleting Docker image from registry"
+gcloud container images delete $IMAGE_NAME --force-delete-tags --quiet || echo "No docker image existed"
 echo "Pushing Docker image to registry"
 docker push $IMAGE_NAME
 cd ../
 
-# Step 2: Deploy with Helm
+# Deploy with Helm
+echo "Deleting helm resources because the docker images for any microservice can be patched"
+helm uninstall helm -n devops-microservices
 echo "Deploying application with Helm"
-helm upgrade --install helm-chart $CHART_DIR --namespace $NAMESPACE --set appVersion=$APP_VERSION
+helm upgrade --install helm $CHART_DIR --namespace $NAMESPACE --set majorVersion=$major_version --set appVersion=$APP_VERSION
 
 echo "Deployment complete"
 

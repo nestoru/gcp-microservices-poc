@@ -10,11 +10,11 @@ spec:
   rules:
   - http:
       paths:
-      - path: /v{{ .Values.appVersion }}/
+      - path: /v{{ .Values.majorVersion }}/
         pathType: Prefix
         backend:
           service:
-            name: devops-microservices-{{ .Values.appVersion }}
+            name: devops-microservices-{{ .Values.majorVersion }}
             port:
-              number: 443
+              number: 80 
 
