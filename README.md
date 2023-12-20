@@ -215,9 +215,9 @@ rm -fr helm/templates/*
 ```
 helm dependency update ./helm && helm upgrade --install helm ./helm --namespace devops-microservices --set appVersion=1.0.0 --set majorVersion=1 
 ```
-- Deploy microservice version 1
+- Deploy microservice version 1.0.1 directly from devops-microservices-1 branch
 ```
-./deploy.sh 1
+git checkout devops-microservices-1 && git pull; ./deploy.sh 1.0.2
 ```
 - Use port forwarding to interact with the pod running app
 ```
@@ -257,9 +257,39 @@ git push
 ```
 - Deploy microservices
 ```
-git checkout devops-microservices-1 && git pull; git branch && ./deploy.sh 1.0.1
-git checkout devops-microservices-2 && git pull; git branch && ./deploy.sh 2.0.1
+git checkout devops-microservices-1 && git pull; git branch && ./deploy.sh 1.0.2
+git checkout devops-microservices-2 && git pull; git branch && ./deploy.sh 2.0.2
 ```
+## Testing the two microservices are separate versions
+This test proves that we have two microservices whcih are hit based on the major version number provided in the url path
+```
+nu@34 gcp-devops-iac % export EXPECTED_API_KEY='2f5ae96c-b558-4c7b-a590-a501ae1c3f6c'
+export HOST=34.175.201.131
+curl -kX POST \
+-H "X-Parse-REST-API-Key: ${EXPECTED_API_KEY}" \
+-H "Content-Type: application/json" \
+-d '{ "message": "This is a test", "to": "Juan Perez", "from": "Rita Asturia", "timeToLifeSec": 45 }' \
+http://${HOST}/v1/DevOps
+{
+  "major_version": 1,
+  "message": "Hello Rita Asturia your message will be sent"
+}
+nu@34 gcp-devops-iac % export EXPECTED_API_KEY='2f5ae96c-b558-4c7b-a590-a501ae1c3f6c'
+export HOST=34.175.201.131
+curl -kX POST \
+-H "X-Parse-REST-API-Key: ${EXPECTED_API_KEY}" \
+-H "Content-Type: application/json" \
+-d '{ "message": "This is a test", "to": "Juan Perez", "from": "Rita Asturia", "timeToLifeSec": 45 }' \
+http://${HOST}/v2/DevOps
+{
+  "major_version": 2,
+  "message": "Hello Rita Asturia your message will be sent to Juan Perez."
+}
+nu@34 gcp-devops-iac % 
+```
+
+## Make HTTP to port 80 to redirect to HTTPS port 443 and ensure that the certificate is autorenewed
+
 
 ### Release
 
