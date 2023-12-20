@@ -117,6 +117,10 @@ kubectl get pods
 ```
 kubectl get pods --all-namespaces
 ```
+- Get pods and services in the devops-microservices namespace
+```
+kubectl get pods -n devops-microservices && kubectl get services -n devops-microservices
+```
 - Get logs for the ingress nginx service
 ```
 kubectl logs -n devops-microservices -l app.kubernetes.io/component=controller -l app.kubernetes.io/name=ingress-nginx
@@ -128,13 +132,13 @@ In the previous IaC we will deploy a microservice called DevOps.
 Use Helm to deploy the following microservice. Provide instructions on how to handle API versioning.
 - Request Payload example. Note that unless the API key is passed it should not respond.
 ```
-export EXPECTED_API_KEY='2f5ae96c-b558-4c7b-a590-a501ae1c3f6c'
-export HOST=127.0.0.1:3443
+export EXPECTED_API_KEY='2f5ae96c-b558-4c7b-a590-a501ae1c3f6c' && \
+export HOST=localhost:8080 && \
 curl -kX POST \
 -H "X-Parse-REST-API-Key: ${EXPECTED_API_KEY}" \
 -H "Content-Type: application/json" \
 -d '{ "message": "This is a test", "to": "Juan Perez", "from": "Rita Asturia", "timeToLifeSec": 45 }' \
-https://${HOST}/DevOps
+http://${HOST}/DevOps
 ```
 - Response Payload error example:
 ```
@@ -166,7 +170,8 @@ export EXPECTED_API_KEY='2f5ae96c-b558-4c7b-a590-a501ae1c3f6c' && python app.py
 ```
 cd microservice
 docker build . -t devops-microservices 
-docker run -e EXPECTED_API_KEY='2f5ae96c-b558-4c7b-a590-a501ae1c3f6c' --detach --publish 3443:3443 --name devops-microservices devops-microservices
+docker stop devops-microservices; docker rm devops-microservices
+docker run -e EXPECTED_API_KEY='2f5ae96c-b558-4c7b-a590-a501ae1c3f6c' --detach --publish 8080:8080 --name devops-microservices devops-microservices
 # issue curl command and conmfirm it works. To further debug, enter the running container:
 docker exec -ti devops-microservices bash
 ```
@@ -194,7 +199,7 @@ ping gcp.nestorurquiza.com
 - Any request not starting with that pattern should be refused
 - deploy.sh is used to deploy a specific version number (the major version) passed as unique argument.
 - It should not be used manually but for the purpose of this POC we first use it manually and then later use it from CI/CD.
-We will use helm for deploying the app to Google Kubernetes Engine (GKE)
+We will use helm for deploying the app to Google Kubernetes Engine (GKE). Terraform already used helm to deploy the ingress controller needed for load balancing microservices routes (check the terraform helm module).
 - In the helm directory we have already created and customized our chart, this is done using the below command and then changing files as needed
 ```
 helm create helm
@@ -208,7 +213,7 @@ rm -fr helm/templates/*
 - helm/templates/ingress.yaml has the rules for routing the microservice version /v{majorVersion/ to the correct app devops-microservices-{majorVersion}}
 - Use the below to deploy a specific version adhoc
 ```
-helm dependency update ./helm-chart && helm upgrade --install helm-chart ./helm-chart --namespace devops-microservices --set appVersion=1
+helm dependency update ./helm && helm upgrade --install helm ./helm --namespace devops-microservices --set appVersion=1.0.0 --set majorVersion=1 
 ```
 - Deploy microservice version 1
 ```
@@ -216,15 +221,24 @@ helm dependency update ./helm-chart && helm upgrade --install helm-chart ./helm-
 ```
 - Use port forwarding to interact with the pod running app
 ```
+kubectl port-forward pod/`kubectl get pods --namespace devops-microservices | grep devops | head -1 | awk '{print $1}'` 8080/8080
+kubectl get pods
 export pod='devops-microservices-1-57cbbb9779-fbx79'
 kubectl port-forward pod/${pod} 3443:3443
 ```
 - Uninstall all current helm deployed resources
 ```
-helm uninstall helm-chart -n devops-microservices
+helm uninstall helm -n devops-microservices
 ```
-
-
+- Deploy all helm resources
+```
+helm upgrade --install helm ./helm --namespace devops-microservices --set appVersion=1.0.0 --set majorVersion=1
+```
+- Branch microservice version 1
+```
+git checkout -b devops-microservices-1
+git push -u origin devops-microservices-1
+```
 ### Release
 
 
