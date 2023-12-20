@@ -25,7 +25,7 @@ cd ../
 
 # Deploy with Helm
 echo "Deploying application with Helm"
-helm upgrade --install helm $CHART_DIR --namespace $NAMESPACE --set majorVersion=$major_version --set appVersion=$APP_VERSION
+helm upgrade --install helm-${major_version} $CHART_DIR --namespace $NAMESPACE --set majorVersion=$major_version --set appVersion=$APP_VERSION
 
 echo "Deployment complete"
 
