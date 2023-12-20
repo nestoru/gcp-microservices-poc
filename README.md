@@ -89,7 +89,11 @@ kubectl apply -f cert-manager.crds.yaml
 kubectl get crd | grep cert-manager.io
 ```
 
-## Notes on Kubernetes on GCP
+## Useful GKE related commands
+- Reauthenticate when kubectl does not work
+```
+gcloud auth login
+```
 - List available clusters
 ```
 gcloud container clusters list
@@ -108,6 +112,14 @@ kubectl config get-contexts
 kubectl get namespaces
 kubectl config set-context --current --namespace=devops-microservices
 kubectl get pods 
+```
+- Get pods in all namespaces
+```
+kubectl get pods --all-namespaces
+```
+- Get logs for the ingress nginx service
+```
+kubectl logs -n devops-microservices -l app.kubernetes.io/component=controller -l app.kubernetes.io/name=ingress-nginx
 ```
 ## Microservice
 In the previous IaC we will deploy a microservice called DevOps. 
@@ -162,37 +174,56 @@ docker exec -ti devops-microservices bash
 ### Deploy and run on Kubernetes
 The microservice is deployed in the devops-microservices project in GKE. We will package it in a docker image our simple devops-microservices app that listens on port 3443 for HTTPS requests; will deploy it to our GCP cluster called devops-microservice; will use the cert-manager available in that cluster and which was installed via terraform and Helm to make sure the service is encrypted with a valid certificate key; Let's encrypt is used as the certificate issuer; a public IP should expose the service; Google loadbalancer should be attached to that IP; if the request is made to the loadbalancer with pattern /v${majorVersion}/  where majorVersion can be any integer, then load balance the request to the pods with name devops-microservices-${majorVersion}; Any request not starting with that pattern should be refused; use Helm to adhoc deploy the app with a given version number (The version number should be passed via CLI parameter and all necessary files should be built on the fly out of existing helm templates with a .Value placeholder).
 
-- Create an external IP address for the Google loadbalancer
+- Promote the external IP address of the ingress loadbalancer as reserved (in my case it was the below)
 ```
-gcloud compute addresses create devops-microservices --global
-gcloud compute addresses describe devops-microservices --global
+gcloud compute addresses create devops-microservices-ip --addresses 34.175.181.242 --region europe-southwest1 
+gcloud compute addresses describe devops-microservices-ip --region europe-southwest1 
+gcloud compute addresses list
+
 ```
-The output should give you the external address. In my case it was 34.160.253.11. With that address you should be able to use the nip.io wildcard DNS service to serve the app using a let's encrypt certificate on any url like .34.160.253.11.nip.io. We will use gcp-microservice.34.160.253.11.nip.io. You can confirm it hits your loadbalancer:
+The output should give you the external address. In my case it was 34.175.28.35. With that address you should map it to a subdomain you own via an A record, in my case gcp.nestorurquiza.com for the purpose of this POC..
+
 ```
-ping gcp-microservice.34.160.253.11.nip.io
+ping gcp.nestorurquiza.com 
 ```
 - Let's encrypt should be the certificate issuer.
-- A public IP reserved in GCP and DNS resolving gcp-microservice.34.160.253.11.nip.io to that IP
+- A public IP reserved in GCP and DNS setup to point to that IP 
 - The app should be deployed in two pods and registered dynamically as devops-microservices-1 if "1" is set to be its version, devops-microservices-2 if "2" is set to be its version and so on. The version is mandatory to be able to deploy.
-- Google loadbalancer should respond to requests to gcp-microservice.34.160.253.11.nip.io
+- Google loadbalancer should respond to requests to the FQDN specified in DNS
 - If the request is made to the loadbalancer with pattern /v${majorVersion}/  where majorVersion can be any integer, then load balance the request to the pods with name devops-microservices-${majorVersion}
 - Any request not starting with that pattern should be refused
 - deploy.sh is used to deploy a specific version number (the major version) passed as unique argument.
 - It should not be used manually but for the purpose of this POC we first use it manually and then later use it from CI/CD.
 We will use helm for deploying the app to Google Kubernetes Engine (GKE)
-- In the helmet-chart directory we have already created and customized our chart, this is done using the below command and then changing files as needed
+- In the helm directory we have already created and customized our chart, this is done using the below command and then changing files as needed
 ```
-helm create helm-chart
-rm -fr helm-chart/templates/*
+helm create helm
+rm -fr helm/templates/*
 ```
-- helm-chart/templates/deployment.yaml contains the image to deploy using this version number.
-- helm-chart/templates/letsencrypt-clusterissuer.yaml has the Let's Encrypt ClusterIssuer configuration.
-- helm-chart/templates/service.yaml has the loadbalancer, and source/detination ports for the service.
-- helm-chart/templates/ingress.yaml has the rules for routing the microservice version /v{majorVersion/ to the correct app devops-microservices-{majorVersion}}
+- helm/Chart.yaml contains the bare minimum (name and description of the help chart).
+- helm/values.yaml is blank on purpose as we want to add just what we need and no values are needed other than the version which will be passed via command line.
+- helm/templates/deployment.yaml contains the image to deploy using this version number.
+- helm/templates/letsencrypt-clusterissuer.yaml has the Let's Encrypt ClusterIssuer configuration.
+- helm/templates/service.yaml has the loadbalancer, and source/detination ports for the service.
+- helm/templates/ingress.yaml has the rules for routing the microservice version /v{majorVersion/ to the correct app devops-microservices-{majorVersion}}
 - Use the below to deploy a specific version adhoc
 ```
-helm upgrade --install helm-chart ./helm-chart --namespace devops-microservices --set appVersion=1
+helm dependency update ./helm-chart && helm upgrade --install helm-chart ./helm-chart --namespace devops-microservices --set appVersion=1
 ```
+- Deploy microservice version 1
+```
+./deploy.sh 1
+```
+- Use port forwarding to interact with the pod running app
+```
+export pod='devops-microservices-1-57cbbb9779-fbx79'
+kubectl port-forward pod/${pod} 3443:3443
+```
+- Uninstall all current helm deployed resources
+```
+helm uninstall helm-chart -n devops-microservices
+```
+
 
 ### Release
 

@@ -1,16 +1,18 @@
-# Install cert-manager via Helm in GKE cluster.
-resource "kubernetes_namespace" "cert_manager" {
-  metadata {
-    name = "cert-manager"
+provider "helm" {
+  kubernetes {
+    config_path = "~/.kube/config"
   }
 }
 
-resource "helm_release" "cert_manager" {
-  name       = "cert-manager"
-  repository = "https://charts.jetstack.io"
-  chart      = "cert-manager"
-  namespace  = kubernetes_namespace.cert_manager.metadata[0].name
+resource "helm_release" "nginx_ingress" {
+  name       = "nginx-ingress"
+  repository = "https://kubernetes.github.io/ingress-nginx"
+  chart      = "ingress-nginx"
+  namespace  = "devops-microservices"
 
-  depends_on = [kubernetes_namespace.cert_manager]
+  set {
+    name  = "controller.publishService.enabled"
+    value = "true"
+  }
 }
 
