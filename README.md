@@ -239,6 +239,14 @@ helm upgrade --install helm ./helm --namespace devops-microservices --set appVer
 git checkout -b devops-microservices-1
 git push -u origin devops-microservices-1
 ```
+- Switch to microservice version 1 and merge new code from branch into it
+```
+git branch
+git checkout devops-microservices-1
+git merge main
+git push
+```
+
 ### Release
 
 
