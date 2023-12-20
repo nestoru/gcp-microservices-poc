@@ -230,9 +230,18 @@ kubectl port-forward pod/${pod} 3443:3443
 ```
 helm uninstall helm -n devops-microservices
 ```
-- Deploy all helm resources
+- Reviee all helm templates
 ```
-helm upgrade --install helm ./helm --namespace devops-microservices --set appVersion=1.0.0 --set majorVersion=1
+find ./helm/templates -type f -name "*.yaml" -exec sh -c 'echo "File: {}"; cat {}' \;
+```
+- Deploy all helm resources. Pay attention to version numbers
+```
+helm upgrade --install helm-1 ./helm --namespace devops-microservices --set majorVersion=1 --set appVersion=1.0.1
+helm upgrade --install helm-2 ./helm --namespace devops-microservices --set majorVersion=2 --set appVersion=2.0.1
+```
+- Confirm resources are deployed
+```
+kubectl get pods -n devops-microservices && kubectl get services -n devops-microservices
 ```
 - Branch microservice version 1
 ```
@@ -245,6 +254,11 @@ git branch
 git checkout devops-microservices-1
 git merge main
 git push
+```
+- Deploy microservices
+```
+git checkout devops-microservices-1 && git pull; git branch && ./deploy.sh 1.0.1
+git checkout devops-microservices-2 && git pull; git branch && ./deploy.sh 2.0.1
 ```
 
 ### Release
