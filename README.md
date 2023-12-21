@@ -45,6 +45,7 @@ gcloud projects add-iam-policy-binding devops-microservices \
 gcloud iam service-accounts keys create devops-microservices_credentials.json \
   --iam-account devops-microservices@devops-microservices.iam.gserviceaccount.com
 ```
+- Make sure devops-microservices_credentials.json is in the .gitignore file as you do not want to commit that to the same repo where developers and devops work. Use the need to know principle. Instead have the file somewhere else in a secure vault and copy it temporarily to the project as needed.
 - Configure docker to allow interactions with google cloud registry (GCR)
 ```
 gcloud auth configure-docker
