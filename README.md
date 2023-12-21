@@ -179,14 +179,18 @@ docker exec -ti devops-microservices bash
 ### Deploy and run on Kubernetes
 The microservice is deployed in the devops-microservices project in GKE. We will package it in a docker image our simple devops-microservices app that listens on port 3443 for HTTPS requests; will deploy it to our GCP cluster called devops-microservice; will use the cert-manager available in that cluster and which was installed via terraform and Helm to make sure the service is encrypted with a valid certificate key; Let's encrypt is used as the certificate issuer; a public IP should expose the service; Google loadbalancer should be attached to that IP; if the request is made to the loadbalancer with pattern /v${majorVersion}/  where majorVersion can be any integer, then load balance the request to the pods with name devops-microservices-${majorVersion}; Any request not starting with that pattern should be refused; use Helm to adhoc deploy the app with a given version number (The version number should be passed via CLI parameter and all necessary files should be built on the fly out of existing helm templates with a .Value placeholder).
 
+- Find the external IP address being used in the ingress
+```
+kubectl get services -n devops-microservices
+```
 - Promote the external IP address of the ingress loadbalancer as reserved (in my case it was the below)
 ```
-gcloud compute addresses create devops-microservices-ip --addresses 34.175.181.242 --region europe-southwest1 
+gcloud compute addresses create devops-microservices-ip --addresses 34.175.201.131 --region europe-southwest1 
 gcloud compute addresses describe devops-microservices-ip --region europe-southwest1 
 gcloud compute addresses list
 
 ```
-The output should give you the external address. In my case it was 34.175.28.35. With that address you should map it to a subdomain you own via an A record, in my case gcp.nestorurquiza.com for the purpose of this POC..
+The output should give you the external address. With that address you should map it to a subdomain you own via an A record, in my case gcp.nestorurquiza.com for the purpose of this POC..
 
 ```
 ping gcp.nestorurquiza.com 
@@ -213,11 +217,11 @@ rm -fr helm/templates/*
 - helm/templates/ingress.yaml has the rules for routing the microservice version /v{majorVersion/ to the correct app devops-microservices-{majorVersion}}
 - Use the below to deploy a specific version adhoc
 ```
-helm dependency update ./helm && helm upgrade --install helm ./helm --namespace devops-microservices --set appVersion=1.0.0 --set majorVersion=1 
+helm dependency update ./helm && helm upgrade --install helm-1 ./helm --namespace devops-microservices --set appVersion=1.0.3 --set majorVersion=1 
 ```
-- Deploy microservice version 1.0.1 directly from devops-microservices-1 branch
+- Deploy microservice version 1.0.3 directly from devops-microservices-1 branch
 ```
-git checkout devops-microservices-1 && git pull; ./deploy.sh 1.0.2
+git checkout devops-microservices-1 && git pull; ./deploy.sh 1.0.3
 ```
 - Use port forwarding to interact with the pod running app
 ```
@@ -236,8 +240,8 @@ find ./helm/templates -type f -name "*.yaml" -exec sh -c 'echo "File: {}"; cat {
 ```
 - Deploy all helm resources. Pay attention to version numbers
 ```
-helm upgrade --install helm-1 ./helm --namespace devops-microservices --set majorVersion=1 --set appVersion=1.0.1
-helm upgrade --install helm-2 ./helm --namespace devops-microservices --set majorVersion=2 --set appVersion=2.0.1
+helm upgrade --install helm-1 ./helm --namespace devops-microservices --set majorVersion=1 --set appVersion=1.0.3
+helm upgrade --install helm-2 ./helm --namespace devops-microservices --set majorVersion=2 --set appVersion=2.0.2
 ```
 - Confirm resources are deployed
 ```
@@ -257,7 +261,7 @@ git push
 ```
 - Deploy microservices
 ```
-git checkout devops-microservices-1 && git pull; git branch && ./deploy.sh 1.0.2
+git checkout devops-microservices-1 && git pull; git branch && ./deploy.sh 1.0.3
 git checkout devops-microservices-2 && git pull; git branch && ./deploy.sh 2.0.2
 ```
 ## Testing the two microservices are separate versions
@@ -289,16 +293,45 @@ nu@34 gcp-devops-iac %
 ```
 
 ## Make HTTP to port 80 to redirect to HTTPS port 443 and ensure that the certificate is autorenewed
+This is achieved by adding SSL configuration and the host to ingress.yaml, adding resource "helm_release" "nginx_ingress in helm.tf and adding Certificate manifests and ClusterIssuer in helm/templates/certificate.yaml helm/templates/tls-issuer.yaml respectively.
 
+
+After all this is done we should get the two microservices responding correctly:
+```
+nu@gcp gcp-devops-iac % export EXPECTED_API_KEY='2f5ae96c-b558-4c7b-a590-a501ae1c3f6c'                       
+export HOST=gcp.nestorurquiza.com
+curl -X POST \ 
+-H "X-Parse-REST-API-Key: ${EXPECTED_API_KEY}" \
+-H "Content-Type: application/json" \
+-d '{ "message": "This is a test", "to": "Juan Perez", "from": "Rita Asturia", "timeToLifeSec": 45 }' \
+https://${HOST}/v2/DevOps
+{
+  "major_version": 2,
+  "message": "Hello Rita Asturia your message will be sent to Juan Perez."
+}
+nu@gcp gcp-devops-iac % export EXPECTED_API_KEY='2f5ae96c-b558-4c7b-a590-a501ae1c3f6c'
+export HOST=gcp.nestorurquiza.com
+curl -X POST \
+-H "X-Parse-REST-API-Key: ${EXPECTED_API_KEY}" \
+-H "Content-Type: application/json" \
+-d '{ "message": "This is a test", "to": "Juan Perez", "from": "Rita Asturia", "timeToLifeSec": 45 }' \
+https://${HOST}/v1/DevOps
+{
+  "major_version": 1,
+  "message": "Hello Rita Asturia your message will be sent"
+}
+```
 
 ### Release
-
+Releasing is the process of tagging and registering the status of such tag like whether tests pass or not. TODO: Add a gke-deploy.sh script that will check any new tag in valid branches and deploy the specific version with deploy.sh.
 
 ### Testing
+End to end Testing should be triggered when any new microservice is deployed but API releated e2e tests for the specific microservice should be triggered first and if those pass you might want to push the microservice new version to prod.
 
 ### API version management
+Adding a new version of a microservice and using that version from multiple other microservices or UIs is serious business. Logging aggrgation, metrics, thressholds and many more SRE concerns have to be considered. Microservices can reduce delivery time significantly but the investment is not little.
 
-### SDLC
+### SDLC recommendations
 1. Start from main branch
 2. Once you get a v1 that is good enough then create a branch out of it
 3. release (tag) v1 branch

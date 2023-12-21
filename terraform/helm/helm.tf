@@ -16,3 +16,17 @@ resource "helm_release" "nginx_ingress" {
   }
 }
 
+resource "helm_release" "cert_manager" {
+  name       = "cert-manager"
+  repository = "https://charts.jetstack.io"
+  chart      = "cert-manager"
+  version    = "1.5.0"  # Specify the desired version
+
+  set {
+    name  = "installCRDs"
+    value = "true"
+  }
+
+  # Additional configurations can be added here
+}
+
