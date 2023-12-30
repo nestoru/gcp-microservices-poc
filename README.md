@@ -367,6 +367,13 @@ Adding a new version of a microservice and using that version from multiple othe
 7. Organizing this requires a lot of transaction costs, which is one of the disadvantages of this modus operandi versus handling all versions at the app layer (treating each microservice as a monolith).
 8. Have a deprecation policy for each version.
 
-
-
+## Cleanup
+- Find out your projects
+```
+gcloud projects list
+```
+- Delete the ones that apply to this POC (Warning: Make sure you you understand that you are deleting all resources for this project)
+```
+gcloud projects delete <your-POC-project>
+```
 
